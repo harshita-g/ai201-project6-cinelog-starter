@@ -18,3 +18,12 @@
 
 **Tradeoff acknowledged:** A watchlist is different from a completed collection — it's aspirational and unfinished, and some users may not expect or want their "haven't watched yet" list to be visible by default (e.g., it can reveal viewing gaps or upcoming plans they didn't intend to broadcast). Rather than defaulting to private to avoid this, I think the better mitigation is transparency: clearly disclosing at signup or first use that watchlist entries are public by default, so users are making an informed choice rather than discovering it after the fact. A future visibility toggle (allowing users to mark individual entries private) would be a
 
+## Comment 5 — Sort order
+**My position:** Agreed with the maintainer — switched `get_watchlist()` to sort by `date_added` descending (most recently added first), instead of alphabetical by title.
+
+**Reasoning:** A watchlist is inherently about "what am I planning to watch," and recency is usually more relevant here than alphabetical order — users are more likely to want to see what they just added rather than scroll to find it. This also brings the watchlist in line with `get_collection()`, which already sorts by `date_added` descending, so the two features now behave consistently.
+
+**Bug found while testing this change:** While writing a test to confirm the new sort order (`test_get_watchlist_returns_newest_first`), I discovered that `WatchlistEntry` had no working `.film` relationship — calling `entry.film.to_dict()` in `get_watchlist()` raised `AttributeError: 'WatchlistEntry' object has no attribute 'film'`. This was a pre-existing bug: `Film` defines `collection_entries = db.relationship("CollectionEntry", backref="film", lazy=True)`, which is what gives `CollectionEntry` objects a working `.film` attribute, but there was no equivalent relationship declared for `WatchlistEntry`. Since `GET /watchlist/<user_id>` calls `get_watchlist()` directly, this bug would have broken that endpoint in production, not just in tests. I fixed it by adding `watchlist_entries = db.relationship("WatchlistEntry", backref="film", lazy=True)` to the `Film` model in `models.py`, mirroring the existing pattern for collections.
+
+**How I verified:** Added `test_get_watchlist_returns_newest_first` to `tests/test_watchlist.py`, modeled on `test_get_collection_returns_newest_first`. After fixing the missing relationship, ran `pytest tests/ -v` — all 7 tests pass.
+
