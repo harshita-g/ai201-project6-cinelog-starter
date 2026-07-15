@@ -27,3 +27,11 @@
 
 **How I verified:** Added `test_get_watchlist_returns_newest_first` to `tests/test_watchlist.py`, modeled on `test_get_collection_returns_newest_first`. After fixing the missing relationship, ran `pytest tests/ -v` — all 7 tests pass.
 
+## Comment 6 — Rebase
+**What conflicted:** Ran `git fetch origin` and `git rebase origin/main`. The only explicit conflict git flagged was in `.gitignore` (both main and my branch added one independently) — resolved by merging both sets of ignore patterns into one file.
+
+However, after the rebase reported success, I manually checked `models.py` rather than assuming it was correct, since the sort-order/relationship work in Comment 5 had already taught me not to trust that things "just work." I found that the rebase had silently dropped the entire `WatchlistEntry` class definition, even though `Film` still referenced it via `watchlist_entries = db.relationship("WatchlistEntry", backref="film", lazy=True)`. This happened because main's `models.py` never had a `WatchlistEntry` class (it only exists on my branch), and my commit that added the `watchlist_entries` relationship line applied cleanly against main's version without git flagging a conflict — even though the result was structurally broken (a relationship pointing to a nonexistent model).
+
+**How I resolved it:** Rewrote `models.py` to restore the `WatchlistEntry` class, and updated its `film_id` column from `db.Integer` to `db.String(36)` to match the new UUID type on `Film.id` (the actual change called for in this comment). Verified against main's confirmed changes (`Film.id` UUID migration) using `git diff HEAD origin/main -- models.py` before the rebase, so the fix aligns with the intended refactor rather than guessing.
+
+**How I verified no conflict remains:** Ran `Select-String -Path models.py -Pattern "class"` to confirm all four expected model classes (`User`, `Film`, `CollectionEntry`, `WatchlistEntry`) are present. Ran `pytest tests/ -v` — all tests pass, confirming `WatchlistEntry.film_id` as UUID works correctly end-to-end with the rest of the app. Ran `git log --oneline` to confirm the branch history is linear with no merge commits.
