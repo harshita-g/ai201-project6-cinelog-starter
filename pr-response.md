@@ -35,3 +35,36 @@ However, after the rebase reported success, I manually checked `models.py` rathe
 **How I resolved it:** Rewrote `models.py` to restore the `WatchlistEntry` class, and updated its `film_id` column from `db.Integer` to `db.String(36)` to match the new UUID type on `Film.id` (the actual change called for in this comment). Verified against main's confirmed changes (`Film.id` UUID migration) using `git diff HEAD origin/main -- models.py` before the rebase, so the fix aligns with the intended refactor rather than guessing.
 
 **How I verified no conflict remains:** Ran `Select-String -Path models.py -Pattern "class"` to confirm all four expected model classes (`User`, `Film`, `CollectionEntry`, `WatchlistEntry`) are present. Ran `pytest tests/ -v` — all tests pass, confirming `WatchlistEntry.film_id` as UUID works correctly end-to-end with the rest of the app. Ran `git log --oneline` to confirm the branch history is linear with no merge commits.
+
+
+![alt text](image.png)
+
+## AI Usage
+I used AI throughout this project as a coding assistant, mainly for orientation, verification, and troubleshooting rather than generating my design decisions:
+
+- **Codebase orientation:** Before touching any review comments, I had Claude help me read through `collection_service.py` and `test_collection.py` to understand the existing naming conventions and dedup pattern, which I then mirrored manually in `watchlist_service.py`.
+- **Verification over assumption:** For Comment 1 (rename), I initially assumed a rename was needed, but used `grep`/`Select-String` to check first and found `add_to_watchlist` was already used everywhere — so I documented that no change was necessary instead of making an unnecessary edit.
+- **Debugging a real bug:** While writing a test for Comment 5 (sort order), I hit an `AttributeError: 'WatchlistEntry' object has no attribute 'film'`. Claude helped me trace this to a missing `db.relationship` on the `Film` model (present for `CollectionEntry` but missing for `WatchlistEntry`), which I then fixed in `models.py`.
+- **Catching a silent rebase issue:** After rebasing onto main (Comment 6), git reported success with no conflicts in `models.py`, but I manually checked the file rather than trusting that and discovered the rebase had silently dropped the entire `WatchlistEntry` class while a stale `Film.watchlist_entries` relationship still referenced it. Claude helped me understand why this happened (non-overlapping line changes don't trigger conflict markers) and I rewrote the model correctly, updating `film_id` to UUID to match the refactor.
+- **Design decisions (Comments 4 and 5):** I made these decisions myself based on my own read of CineLog's purpose as a community app. I did not ask Claude to write these arguments; I used it only to help me articulate reasoning I had already decided on and to make sure my written response addressed the reviewer's actual point rather than just stating a preference.
+- **Git/rebase mechanics:** Claude walked me through interactive rebase syntax (`reword`, `fixup`) and Vim keystrokes when I was cleaning up commit history, since I made a few mistakes with Vim's modal editing along the way (closing the editor without saving changes, `:wq` not applying edits). I eventually used `git commit --amend` directly to fix the one message that wasn't taking effect through the interactive rebase editor.
+
+
+
+
+## PR Description
+
+### What this feature does
+Adds a watchlist feature to CineLog, letting users save films they want to watch later. Includes:
+- `add_to_watchlist(user_id, film_id)` — adds a film to a user's watchlist, with duplicate prevention (raises `AlreadyInWatchlistError` if the film is already saved)
+- `get_watchlist(user_id)` — returns a user's watchlist, sorted by most recently added
+- `GET /watchlist/<user_id>` and `POST /watchlist/<user_id>/add` endpoints
+
+### Design decisions
+**Default visibility (`public=True`):** Watchlist entries default to public. CineLog is a community film tracking app, and defaulting to public keeps the discovery/social value intact, since most users never change defaults. Tradeoff: some users may not expect an unfinished/aspirational list to be visible by default — mitigated by clear upfront disclosure rather than defaulting to private. See Comment 4 above for full reasoning.
+
+**Sort order (date added, newest first):** Agreed with reviewer feedback to sort by `date_added` descending rather than alphabetically, matching the existing `get_collection()` pattern and how users naturally think about a "want to watch" list. See Comment 5 above for full reasoning.
+
+### Manual testing
+1. Start the app: `python app.py`
+2. Add a film to a watchlist:
