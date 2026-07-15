@@ -1,0 +1,3 @@
+## Comment 1 — Rename
+**What I did:** Checked `services/watchlist_service.py` and confirmed the function is already named `add_to_watchlist()`, matching the project's `verb_to_noun` naming convention (consistent with `add_to_collection()` in `collection_service.py`). No rename was necessary.
+**How I verified:** Ran `Get-ChildItem -Recurse -Filter *.py | Select-String -Pattern "save_to_watchlist|add_to_watchlist"` across the project. Found three matches, all referencing `add_to_watchlist` — the definition in `watchlist_service.py` and two references (import + call) in `routes/watchlist/watchlist.py`. No occurrences of the old `save_to_watchlist` name remain anywhere.
